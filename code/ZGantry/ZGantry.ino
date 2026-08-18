@@ -1,12 +1,12 @@
-// Optimized A4988 stepper driver control using AccelStepper
-// Non-blocking, with acceleration/deceleration ramping.
+// A4988 stepper driver controlling NEMA 17 Motor through Arduino Uno R4 w CNC Shield 
 
 #include <AccelStepper.h>
 #include "Serial.h"
 
-// TODO: Fix pin assignments later
-#define STEP_PIN   3
-#define DIR_PIN    6
+// A4988 set to "Y" Driver seat
+#define STEP_PIN    3
+#define DIR_PIN     6
+#define EN_PIN      8
 
 // --- Motor / motion parameters ---
 const int STEPS_PER_REV = 200;     // 1.8 deg/step motor, full-step
@@ -25,9 +25,8 @@ bool goingForward = true;
 AccelStepper stepper(AccelStepper::DRIVER, STEP_PIN, DIR_PIN);
 
 void setup() {
-  // pinMode(ENABLE_PIN, OUTPUT);
-  // digitalWrite(ENABLE_PIN, LOW);   // LOW = driver enabled on A4988
-  digitalWrite(8, LOW);
+  pinMode(EN_PIN, OUTPUT);
+  digitalWrite(EN_PIN, LOW); // Active Low
 
   stepper.setMaxSpeed(MAX_SPEED_SPS);
   stepper.setAcceleration(ACCELERATION_SPS2);
