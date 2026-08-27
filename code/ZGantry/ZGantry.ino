@@ -30,6 +30,7 @@ void setup() {
 
   stepper.setMaxSpeed(MAX_SPEED_SPS);
   stepper.setAcceleration(ACCELERATION_SPS2);
+  stepper.setMinPulseWidth(10);   // 10 µs step pulses 
 
   Serial.begin(9600);
   while(!Serial);
@@ -74,5 +75,24 @@ void handleCommand(const char* cmd) {
     stepper.move(-1 * steps);
       Serial.print("Writing ");
       Serial.println(steps);
+  }
+
+  else if(cmd[0] == 'P') digitalWrite(EN_PIN, LOW); 
+
+  else if(cmd[0] == 'T') 
+  {
+      long freq = atol(cmd + 1);
+      tone(3, freq); 
+      Serial.print("Tone"); 
+      Serial.println(freq);
+
+  }
+
+
+
+
+  else
+  {
+      digitalWrite(EN_PIN, HIGH); // Active Low
   }
 }
