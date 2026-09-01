@@ -50,6 +50,7 @@ AccelStepper Zstepper(AccelStepper::DRIVER, Z_STEP_PIN, Z_DIR_PIN);
 AccelStepper Astepper(AccelStepper::DRIVER, A_STEP_PIN, A_DIR_PIN); 
 
 void setup() {
+<<<<<<< HEAD
     pinMode(NEN_PIN, OUTPUT);
     digitalWrite(NEN_PIN, LOW);
 
