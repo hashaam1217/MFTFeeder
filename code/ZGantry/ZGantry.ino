@@ -2,8 +2,12 @@
 // Z and Elevator (Y) steppers are classic NEMA 17
 // X is a NEMA 23 Stepper with it's own closed loop driver (CL57Y)
 
+// TODO: Need to add arithmetic to account for different sensitivity settings for CL57Y
+
 #include "Serial.h"
 #include "AccelStepper.h"
+
+// #define SKIP_HOMING 
 
 // pinouts
 #define X_STEP_PIN      2
@@ -15,13 +19,22 @@
 #define Z_DIR_PIN       7
 #define A_DIR_PIN       12
 #define A_STEP_PIN      13
+#define X_ENDSTOP       9
+#define Y_ENDSTOP       10 
+#define Z_ENDSTOP       11
 
 enum FSM {
+    HOME,
+    HOME_X, 
+    HOME_Z, 
+    HOME_ELEVATOR,
     PICK_DESCEND, 
     PICK_ASCEND, 
     MOVE_FORWARD, 
     PLACE_DESCEND, 
-    RETURN
+    RETURN, 
+    PAUSE, 
+    FAULT    
 } FSM_STATE; 
 
 // I need to figure these out later
@@ -38,10 +51,15 @@ const float Y_ACCELERATION = 4000.0;  // steps/sec^2 ramp rate
 const float Z_MAX_SPEED     = 2000.0;  // steps/sec at full speed
 const float Z_ACCELERATION = 4000.0;  // steps/sec^2 ramp rate
 
+// For Serial 
 char buf[32];
 uint8_t idx = 0;
-bool goingForward = true;
-bool flip = true; 
+
+// For Motors 
+int16_t x_step_count; 
+int16_t y_step_count; 
+int16_t z_step_count; 
+int16_t a_step_count; 
 
 // AccelStepper in DRIVER mode: 1 = STEP/DIR interface (what the A4988 uses)
 AccelStepper Xstepper(AccelStepper::DRIVER, X_STEP_PIN, X_DIR_PIN);
@@ -50,8 +68,10 @@ AccelStepper Zstepper(AccelStepper::DRIVER, Z_STEP_PIN, Z_DIR_PIN);
 AccelStepper Astepper(AccelStepper::DRIVER, A_STEP_PIN, A_DIR_PIN); 
 
 void setup() {
-<<<<<<< HEAD
     pinMode(NEN_PIN, OUTPUT);
+    pinMode(X_ENDSTOP, INPUT_PULLUP);
+    pinMode(Y_ENDSTOP, INPUT_PULLUP);
+    pinMode(Z_ENDSTOP, INPUT_PULLUP);
     digitalWrite(NEN_PIN, LOW);
 
     Xstepper.setMaxSpeed(X_MAX_SPEED);
@@ -94,31 +114,48 @@ void loop() {
                 Astepper.distanceToGo() ); 
     digitalWrite(NEN_PIN, MotorsOn ? LOW : HIGH); 
 
-
-    // FSM Time :P 
-    /*
-    if (!MotorsOn)
-    {
-        delay(1000); 
-        if (flip) 
-        {
-            Xstepper.move(300);
-            flip = false;
-            Serial.println("Forward T");
-        }
-        else 
-        {
-            Xstepper.move(-300); 
-            flip = true;
-            Serial.println("Reverse T");
-        }
-    }
-    */
     if (!MotorsOn) // NEGEDGE 
     {
-        delay(100); // Tune for minimum until steps aren't missed. 
+        delay(10); // Tune for minimum until steps aren't missed. 
+        // Need to figure out how to axe this while ensuring that steps aren't missed
         switch (FSM_STATE)
         {
+            case HOME: 
+                FSM_STATE = HOME_ELEVATOR;
+                Zstepper.move(-2000); 
+
+                #ifdef SKIP_HOMING
+                    FSM_STATE = PICK_DESCEND; 
+                #endif
+
+                break;
+
+            case HOME_X: 
+                if (!digitalRead(X_ENDSTOP)) 
+                {
+                    // FSM_STATE = HOME_Z;
+                    x_step_count = 0; 
+                    Xstepper.move(-1300); 
+
+                }                
+                else 
+                {
+                    Xstepper.move(1); 
+                }
+                Serial.println(digitalRead(X_ENDSTOP));
+                break; 
+
+            case HOME_Z: 
+                // Xstepper.move(-10); 
+                Serial.println("ENDSTOP");
+                FSM_STATE = HOME_ELEVATOR; 
+                break;
+
+            case HOME_ELEVATOR: 
+                Zstepper.move(10); 
+
+                break; 
+
             case PICK_DESCEND: 
                 Ystepper.move(200);
                 FSM_STATE = PICK_ASCEND;
@@ -146,12 +183,24 @@ void loop() {
                 FSM_STATE = PICK_DESCEND;
                 break;
 
+            case PAUSE: 
+                break;
+
+            case FAULT: 
+                while(1); 
+                break;
+
             default: 
                 Serial.println("FSM DEFAULT CASE"); 
                 FSM_STATE = PICK_ASCEND;
                 break; 
         }
-        Serial.print("FSM_STATE Switch to: ");
+        if (x_step_count > 1300 || x_step_count < 0) 
+        {
+            Serial.println("x_step_count out of bounds");
+            FSM_STATE = FAULT; 
+        }
+        Serial.print("FSM_STATE = ");
         Serial.println(FSM_STATE);
     }
 }
