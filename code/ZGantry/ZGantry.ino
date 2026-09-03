@@ -6,6 +6,7 @@
 
 #include "Serial.h"
 #include "AccelStepper.h"
+#include "ArduinoLog.h"
 
 // #define SKIP_HOMING 
 
@@ -83,27 +84,15 @@ void setup() {
 
     Serial.begin(115200);
     while(!Serial);
-    Serial.println("Init");
+    Log.begin   (LOG_LEVEL_VERBOSE, &Serial);
+
+    Log.traceln("Init");
 }
 
 uint32_t old_time = micros(); 
 uint32_t current_time = micros(); 
 
 void loop() {
-    // Read input for parameters
-    while (Serial.available()) {
-        char c = Serial.read();
-        if (c == '\n' || c == '\r') {
-            if (idx > 0) {
-                buf[idx] = '\0';
-                handleCommand(buf);
-                idx = 0;
-            }
-        } 
-        else if (idx < sizeof(buf) - 1) {
-            buf[idx++] = c;
-        }
-    }
     Xstepper.run();  
     Ystepper.run();  
     Zstepper.run();  
@@ -121,8 +110,10 @@ void loop() {
         switch (FSM_STATE)
         {
             case HOME: 
-                FSM_STATE = HOME_ELEVATOR;
-                Zstepper.move(-2000); 
+                Log.traceln("Starting Homing");
+
+                FSM_STATE = HOME_X;
+                Log.traceln("Starting Homing X");
 
                 #ifdef SKIP_HOMING
                     FSM_STATE = PICK_DESCEND; 
@@ -133,27 +124,39 @@ void loop() {
             case HOME_X: 
                 if (!digitalRead(X_ENDSTOP)) 
                 {
-                    // FSM_STATE = HOME_Z;
+                    FSM_STATE = HOME_Z;
+                    Log.traceln("Starting Homing Z");
+
                     x_step_count = 0; 
                     Xstepper.move(-1300); 
-
                 }                
+
                 else 
                 {
                     Xstepper.move(1); 
                 }
-                Serial.println(digitalRead(X_ENDSTOP));
                 break; 
 
             case HOME_Z: 
-                // Xstepper.move(-10); 
-                Serial.println("ENDSTOP");
+                Log.noticeln("HOME_Z is currently skipped");
                 FSM_STATE = HOME_ELEVATOR; 
+                Log.traceln("Starting Homing Elevator");
                 break;
 
             case HOME_ELEVATOR: 
-                Zstepper.move(10); 
+                if (!digitalRead(Y_ENDSTOP)) 
+                {
+                    FSM_STATE = HOME;
+                    y_step_count = 0; 
 
+                    Ystepper.move(-100); 
+                    y_step_count += 100; 
+                }                
+                else 
+                {
+                    Ystepper.move(100); 
+                    y_step_count -= 100; 
+                }
                 break; 
 
             case PICK_DESCEND: 
@@ -187,86 +190,20 @@ void loop() {
                 break;
 
             case FAULT: 
+                Log.fatalln("ENTERED FAULT STATE");
                 while(1); 
                 break;
 
             default: 
-                Serial.println("FSM DEFAULT CASE"); 
+                Log.errorln("FSM DEFAULT CASE"); 
                 FSM_STATE = PICK_ASCEND;
                 break; 
         }
         if (x_step_count > 1300 || x_step_count < 0) 
         {
-            Serial.println("x_step_count out of bounds");
+            Log.fatalln("x_step_count out of bounds");
             FSM_STATE = FAULT; 
         }
-        Serial.print("FSM_STATE = ");
-        Serial.println(FSM_STATE);
-    }
-}
-
-void handleCommand(const char* cmd) {
-    long steps = 0; 
-    switch (cmd[0])
-    {
-        
-    case 'Z':
-        // e.g. "Z1600" = move 1600 steps Forward
-        steps = atol(cmd + 1);
-        Zstepper.move(steps);
-        Serial.print("Writing Forward ");
-        Serial.println(steps);
-        break;
-
-    case 'z':
-        // e.g. "z1600" = move 1600 steps backwards
-        steps = atol(cmd + 1);
-        Zstepper.move(-1 * steps);
-        Serial.print("Writing Backwards ");
-        Serial.println(steps);
-        break;
-
-    case 'Y':
-        // e.g. "Y1600" = move 1600 steps Forward
-        steps = atol(cmd + 1);
-        Ystepper.move(steps);
-        Serial.print("Writing Forward");
-        Serial.println(steps);
-        break;
-
-    case 'y':
-        // e.g. "y1600" = move 1600 steps backwards
-        steps = atol(cmd + 1);
-        Ystepper.move(-1 * steps);
-        Serial.print("Writing Backwards ");
-        Serial.println(steps);
-        break;
-
-    case 'X':
-        // e.g. "X1600" = move 1600 steps Forward
-        steps = atol(cmd + 1);
-        Xstepper.move(steps);
-        Serial.print("Writing Forward");
-        Serial.println(steps);
-        break;
-
-    case 'x':
-        // e.g. "x1600" = move 1600 steps backwards
-        steps = atol(cmd + 1);
-        Xstepper.move(-1 * steps);
-        Serial.print("Writing Backwards ");
-        Serial.println(steps);
-        break;
-
-    case 'S':
-        Xstepper.setMaxSpeed(atof(cmd + 1));
-        break;
-
-    case 'A':
-        Xstepper.setAcceleration(atof(cmd + 1));
-        break;
-
-    default: 
-        Serial.println("Default Switch Triggered. Uh Oh");
+        Log.traceln("FSM_STATE = %d", FSM_STATE);
     }
 }
