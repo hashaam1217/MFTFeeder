@@ -1,4 +1,4 @@
-// Using 3 Stepper motors to control X, Z, and elevator. 
+// Using 3 Step0per motors to control X, Z, and elevator. 
 // Z and Elevator (Y) steppers are classic NEMA 17
 // X is a NEMA 23 Stepper with it's own closed loop driver (CL57Y)
 
@@ -47,20 +47,20 @@ const long STEPS_PER_REV_MICRO = (long)STEPS_PER_REV * MICROSTEPS;
 // Making these adjustable
 const float X_MAX_SPEED     = 2000.0;  // steps/sec at full speed
 const float X_ACCELERATION = 4000.0;  // steps/sec^2 ramp rate
-const float Y_MAX_SPEED     = 2000.0;  // steps/sec at full speed
+const float Y_MAX_SPEED     = 20000.0;  // steps/sec at full speed
 const float Y_ACCELERATION = 4000.0;  // steps/sec^2 ramp rate
-const float Z_MAX_SPEED     = 2000.0;  // steps/sec at full speed
-const float Z_ACCELERATION = 4000.0;  // steps/sec^2 ramp rate
+const float Z_MAX_SPEED     = 10 * 2000.0;  // steps/sec at full speed
+const float Z_ACCELERATION = 10 * 4000.0;  // steps/sec^2 ramp rate
 
 // For Serial 
 char buf[32];
 uint8_t idx = 0;
 
 // For Motors 
-int16_t x_step_count; 
-int16_t y_step_count; 
-int16_t z_step_count; 
-int16_t a_step_count; 
+int32_t x_step_count; 
+int32_t y_step_count; 
+int32_t z_step_count; 
+int32_t a_step_count; 
 
 // AccelStepper in DRIVER mode: 1 = STEP/DIR interface (what the A4988 uses)
 AccelStepper Xstepper(AccelStepper::DRIVER, X_STEP_PIN, X_DIR_PIN);
@@ -92,6 +92,8 @@ void setup() {
 uint32_t old_time = micros(); 
 uint32_t current_time = micros(); 
 
+FSM OLD_FSM_STATE; 
+
 void loop() {
     Xstepper.run();  
     Ystepper.run();  
@@ -103,9 +105,21 @@ void loop() {
                 Astepper.distanceToGo() ); 
     digitalWrite(NEN_PIN, MotorsOn ? LOW : HIGH); 
 
+
     if (!MotorsOn) // NEGEDGE 
     {
-        delay(10); // Tune for minimum until steps aren't missed. 
+        if (!digitalRead(X_ENDSTOP)) 
+        {
+            FSM_STATE += FAULT;
+            Log.fatalln("X_ENDSTOP triggered");
+            Xstepper.stop();
+
+            x_step_count = 0; 
+            // Xstepper.move(-1300); 
+            // x_step_count += 1300; 
+        }                
+
+        
         // Need to figure out how to axe this while ensuring that steps aren't missed
         switch (FSM_STATE)
         {
@@ -129,6 +143,7 @@ void loop() {
 
                     x_step_count = 0; 
                     Xstepper.move(-1300); 
+                    x_step_count += 1300; 
                 }                
 
                 else 
@@ -146,43 +161,45 @@ void loop() {
             case HOME_ELEVATOR: 
                 if (!digitalRead(Y_ENDSTOP)) 
                 {
-                    FSM_STATE = HOME;
+                    FSM_STATE = PICK_DESCEND;
                     y_step_count = 0; 
 
-                    Ystepper.move(-100); 
-                    y_step_count += 100; 
+                    Ystepper.move( -6400); 
+                    y_step_count += -6400; 
                 }                
                 else 
                 {
-                    Ystepper.move(100); 
-                    y_step_count -= 100; 
+                    Ystepper.move(6400); 
+                    y_step_count += 6400; 
                 }
                 break; 
 
             case PICK_DESCEND: 
-                Ystepper.move(200);
+                Zstepper.move(-800);
                 FSM_STATE = PICK_ASCEND;
                 break;
 
             case PICK_ASCEND: 
-                Ystepper.move(-200);
+                Zstepper.move(800);
                 FSM_STATE = MOVE_FORWARD;
                 break;
 
             case MOVE_FORWARD: 
-                Xstepper.move(-500); 
+                Xstepper.move(-1300); 
+                x_step_count += 1300;
                 FSM_STATE = PLACE_DESCEND;
                 break;
 
             case PLACE_DESCEND: 
                 // Later add X movement to match belt 
-                Ystepper.move(200);
+                Zstepper.move(-800);
                 FSM_STATE = RETURN;
                 break;
 
             case RETURN:
-                Xstepper.move(500); 
-                Ystepper.move(-200);
+                Xstepper.move(1300); 
+                x_step_count += -1300; 
+                Zstepper.move(800);
                 FSM_STATE = PICK_DESCEND;
                 break;
 
@@ -202,7 +219,8 @@ void loop() {
         if (x_step_count > 1300 || x_step_count < 0) 
         {
             Log.fatalln("x_step_count out of bounds");
-            FSM_STATE = FAULT; 
+            Log.fatalln("x_step_count: %d", x_step_count);
+            // FSM_STATE = FAULT; 
         }
         Log.traceln("FSM_STATE = %d", FSM_STATE);
     }
