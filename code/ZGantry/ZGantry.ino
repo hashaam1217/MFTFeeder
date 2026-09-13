@@ -24,6 +24,8 @@
 #define Y_ENDSTOP       10 
 #define Z_ENDSTOP       11
 
+#define DESCEND_DEPTH 2400 
+
 enum FSM {
     HOME,
     HOME_X, 
@@ -108,15 +110,11 @@ void loop() {
 
     if (!MotorsOn) // NEGEDGE 
     {
-        if (!digitalRead(X_ENDSTOP)) 
+        if (!digitalRead(X_ENDSTOP) && FSM_STATE != HOME_X) 
         {
-            FSM_STATE += FAULT;
+            FSM_STATE = FAULT;
             Log.fatalln("X_ENDSTOP triggered");
             Xstepper.stop();
-
-            x_step_count = 0; 
-            // Xstepper.move(-1300); 
-            // x_step_count += 1300; 
         }                
 
         
@@ -142,8 +140,8 @@ void loop() {
                     Log.traceln("Starting Homing Z");
 
                     x_step_count = 0; 
-                    Xstepper.move(-1300); 
-                    x_step_count += 1300; 
+                    Xstepper.move(-100); // 1300 max motion 
+                    x_step_count += 100; 
                 }                
 
                 else 
@@ -169,37 +167,39 @@ void loop() {
                 }                
                 else 
                 {
+                    // High number because max microstepping enabled
                     Ystepper.move(6400); 
                     y_step_count += 6400; 
                 }
                 break; 
 
             case PICK_DESCEND: 
-                Zstepper.move(-800);
+                // Default position is max high
+                Zstepper.move(-1 * DESCEND_DEPTH);
                 FSM_STATE = PICK_ASCEND;
                 break;
 
             case PICK_ASCEND: 
-                Zstepper.move(800);
+                Zstepper.move(DESCEND_DEPTH);
                 FSM_STATE = MOVE_FORWARD;
                 break;
 
             case MOVE_FORWARD: 
-                Xstepper.move(-1300); 
-                x_step_count += 1300;
+                Xstepper.move(-1200); 
+                x_step_count += 1200;
                 FSM_STATE = PLACE_DESCEND;
                 break;
 
             case PLACE_DESCEND: 
                 // Later add X movement to match belt 
-                Zstepper.move(-800);
+                Zstepper.move(-1 * DESCEND_DEPTH);
                 FSM_STATE = RETURN;
                 break;
 
             case RETURN:
-                Xstepper.move(1300); 
-                x_step_count += -1300; 
-                Zstepper.move(800);
+                Xstepper.move(1200); 
+                x_step_count += -1200; 
+                Zstepper.move(DESCEND_DEPTH);
                 FSM_STATE = PICK_DESCEND;
                 break;
 
@@ -220,7 +220,7 @@ void loop() {
         {
             Log.fatalln("x_step_count out of bounds");
             Log.fatalln("x_step_count: %d", x_step_count);
-            // FSM_STATE = FAULT; 
+            FSM_STATE = FAULT; 
         }
         Log.traceln("FSM_STATE = %d", FSM_STATE);
     }
