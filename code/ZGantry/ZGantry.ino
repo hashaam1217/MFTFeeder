@@ -99,7 +99,7 @@ void setup() {
 uint32_t old_time = micros(); 
 uint32_t current_time = micros(); 
 
-FSM OLD_FSM_STATE; 
+FSM OLD_FSM_STATE = 5; 
 
 void loop() {
     Xstepper.run();  
@@ -112,6 +112,22 @@ void loop() {
                 ); 
     digitalWrite(NEN_PIN, MotorsOn ? LOW : HIGH); 
 
+
+    if (x_step_count > 1300 || x_step_count < 0) 
+    {
+        Log.fatalln("x_step_count out of bounds");
+        Log.fatalln("x_step_count: %d", x_step_count);
+        Xstepper.stop();
+        Ystepper.stop();
+        Zstepper.stop();
+        FSM_STATE = FAULT; 
+    }
+
+    if (OLD_FSM_STATE != FSM_STATE)
+    {
+        Log.traceln("FSM_STATE: %d -> %d", OLD_FSM_STATE, FSM_STATE);
+        OLD_FSM_STATE = FSM_STATE;
+    }
 
     if (!MotorsOn) // NEGEDGE 
     {
@@ -234,12 +250,5 @@ void loop() {
                 FSM_STATE = PICK_ASCEND;
                 break; 
         }
-        if (x_step_count > 1300 || x_step_count < 0) 
-        {
-            Log.fatalln("x_step_count out of bounds");
-            Log.fatalln("x_step_count: %d", x_step_count);
-            FSM_STATE = FAULT; 
-        }
-        Log.traceln("FSM_STATE = %d", FSM_STATE);
     }
 }
