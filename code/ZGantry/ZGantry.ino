@@ -18,13 +18,14 @@
 #define NEN_PIN         8
 #define Z_STEP_PIN      4
 #define Z_DIR_PIN       7
-#define A_DIR_PIN       12
-#define A_STEP_PIN      13
+// #define A_DIR_PIN       12
+// #define A_STEP_PIN      13
+#define SOLENOID_PIN    12
 #define X_ENDSTOP       9
 #define Y_ENDSTOP       10 
 #define Z_ENDSTOP       11
 
-#define DESCEND_DEPTH 2400 
+#define DESCEND_DEPTH 2400 //2400 default 
 
 enum FSM {
     HOME,
@@ -68,13 +69,17 @@ int32_t a_step_count;
 AccelStepper Xstepper(AccelStepper::DRIVER, X_STEP_PIN, X_DIR_PIN);
 AccelStepper Ystepper(AccelStepper::DRIVER, Y_STEP_PIN, Y_DIR_PIN); // Elevator
 AccelStepper Zstepper(AccelStepper::DRIVER, Z_STEP_PIN, Z_DIR_PIN);
-AccelStepper Astepper(AccelStepper::DRIVER, A_STEP_PIN, A_DIR_PIN); 
+#ifdef A_DIR_PIN
+    AccelStepper Astepper(AccelStepper::DRIVER, A_STEP_PIN, A_DIR_PIN); 
+#endif
 
 void setup() {
     pinMode(NEN_PIN, OUTPUT);
     pinMode(X_ENDSTOP, INPUT_PULLUP);
     pinMode(Y_ENDSTOP, INPUT_PULLUP);
     pinMode(Z_ENDSTOP, INPUT_PULLUP);
+    pinMode(SOLENOID_PIN, OUTPUT); 
+    digitalWrite(SOLENOID_PIN, LOW);
     digitalWrite(NEN_PIN, LOW);
 
     Xstepper.setMaxSpeed(X_MAX_SPEED);
@@ -103,8 +108,8 @@ void loop() {
     bool MotorsOn = false;
     MotorsOn = (Xstepper.distanceToGo() || 
                 Ystepper.distanceToGo() ||
-                Zstepper.distanceToGo() || 
-                Astepper.distanceToGo() ); 
+                Zstepper.distanceToGo() 
+                ); 
     digitalWrite(NEN_PIN, MotorsOn ? LOW : HIGH); 
 
 
@@ -121,6 +126,7 @@ void loop() {
         // Need to figure out how to axe this while ensuring that steps aren't missed
         switch (FSM_STATE)
         {
+            // FSM STATE = 0
             case HOME: 
                 Log.traceln("Starting Homing");
 
@@ -130,9 +136,12 @@ void loop() {
                 #ifdef SKIP_HOMING
                     FSM_STATE = PICK_DESCEND; 
                 #endif
+                    Ystepper.move( -64000); 
+                    y_step_count += -6400; 
 
                 break;
 
+            // FSM STATE = 1
             case HOME_X: 
                 if (!digitalRead(X_ENDSTOP)) 
                 {
@@ -150,57 +159,66 @@ void loop() {
                 }
                 break; 
 
+            // FSM STATE = 2
             case HOME_Z: 
                 Log.noticeln("HOME_Z is currently skipped");
                 FSM_STATE = HOME_ELEVATOR; 
                 Log.traceln("Starting Homing Elevator");
                 break;
 
+            // FSM STATE = 3
             case HOME_ELEVATOR: 
                 if (!digitalRead(Y_ENDSTOP)) 
                 {
                     FSM_STATE = PICK_DESCEND;
                     y_step_count = 0; 
 
-                    Ystepper.move( -6400); 
-                    y_step_count += -6400; 
+                    // Ystepper.move( -6400); 
+                    // y_step_count += -6400; 
                 }                
                 else 
                 {
                     // High number because max microstepping enabled
-                    Ystepper.move(6400); 
-                    y_step_count += 6400; 
+                    Ystepper.move(1600); 
+                    y_step_count += 1600; 
                 }
                 break; 
 
+            // FSM STATE = 4
             case PICK_DESCEND: 
                 // Default position is max high
                 Zstepper.move(-1 * DESCEND_DEPTH);
+                digitalWrite(SOLENOID_PIN, HIGH); 
                 FSM_STATE = PICK_ASCEND;
                 break;
 
+            // FSM STATE = 5
             case PICK_ASCEND: 
                 Zstepper.move(DESCEND_DEPTH);
                 FSM_STATE = MOVE_FORWARD;
                 break;
 
+            // FSM STATE = 6
             case MOVE_FORWARD: 
                 Xstepper.move(-1200); 
                 x_step_count += 1200;
                 FSM_STATE = PLACE_DESCEND;
                 break;
 
+            // FSM STATE = 7
             case PLACE_DESCEND: 
                 // Later add X movement to match belt 
                 Zstepper.move(-1 * DESCEND_DEPTH);
                 FSM_STATE = RETURN;
+                digitalWrite(SOLENOID_PIN, LOW); 
                 break;
 
+            // FSM STATE = 8
             case RETURN:
                 Xstepper.move(1200); 
                 x_step_count += -1200; 
                 Zstepper.move(DESCEND_DEPTH);
-                FSM_STATE = PICK_DESCEND;
+                FSM_STATE = HOME_ELEVATOR;
                 break;
 
             case PAUSE: 
