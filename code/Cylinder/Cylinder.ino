@@ -60,7 +60,7 @@ char buf[32];
 uint8_t idx = 0;
 
 // For Motors 
-int32_t x_step_count; 
+int32_t x_step_count = 0; 
 int32_t y_step_count; 
 int32_t z_step_count; 
 int32_t a_step_count; 
@@ -99,7 +99,7 @@ void setup() {
 uint32_t old_time = micros(); 
 uint32_t current_time = micros(); 
 
-FSM OLD_FSM_STATE = 5; 
+FSM OLD_FSM_STATE = HOME; 
 
 void loop() {
     Xstepper.run();  
@@ -149,22 +149,27 @@ void loop() {
                 FSM_STATE = HOME_X;
                 Log.traceln("Starting Homing X");
 
+                Xstepper.move(-100); // 1300 max motion 
+                x_step_count += 100; 
+
                 #ifdef SKIP_HOMING
                     FSM_STATE = PICK_DESCEND; 
                 #endif
-                    Ystepper.move( -64000); 
-                    y_step_count += -6400; 
+                    // Ystepper.move( -64000); 
+                    // y_step_count += -6400; 
 
                 break;
 
             // FSM STATE = 1
             case HOME_X: 
+                Xstepper.move(100); // 1300 max motion 
+                x_step_count -= 100; 
+                /*
                 if (!digitalRead(X_ENDSTOP)) 
                 {
                     FSM_STATE = HOME_Z;
                     Log.traceln("Starting Homing Z");
 
-                    x_step_count = 0; 
                     Xstepper.move(-100); // 1300 max motion 
                     x_step_count += 100; 
                 }                
@@ -173,6 +178,7 @@ void loop() {
                 {
                     Xstepper.move(1); 
                 }
+                */
                 break; 
 
             // FSM STATE = 2
