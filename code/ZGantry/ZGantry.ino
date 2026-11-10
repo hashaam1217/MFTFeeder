@@ -7,17 +7,19 @@
 #include "Serial.h"
 #include "AccelStepper.h"
 #include "ArduinoLog.h"
+#include <stdio.h>
 
 // #define SKIP_HOMING 
 
 // pinouts
-#define X_STEP_PIN      2
-#define X_DIR_PIN       5
+// Swapped X and Z
+#define Z_STEP_PIN      2
+#define Z_DIR_PIN       5
 #define Y_STEP_PIN      3
 #define Y_DIR_PIN       6
 #define NEN_PIN         8
-#define Z_STEP_PIN      4
-#define Z_DIR_PIN       7
+#define X_STEP_PIN      4
+#define X_DIR_PIN       7
 // #define A_DIR_PIN       12
 // #define A_STEP_PIN      13
 #define SOLENOID_PIN    12
@@ -49,11 +51,11 @@ const long STEPS_PER_REV_MICRO = (long)STEPS_PER_REV * MICROSTEPS;
 
 // Making these adjustable
 const float X_MAX_SPEED     = 2000.0;  // steps/sec at full speed
-const float X_ACCELERATION = 4000.0;  // steps/sec^2 ramp rate
+const float X_ACCELERATION = 40000.0;  // steps/sec^2 ramp rate
 const float Y_MAX_SPEED     = 20000.0;  // steps/sec at full speed
 const float Y_ACCELERATION = 4000.0;  // steps/sec^2 ramp rate
-const float Z_MAX_SPEED     = 10 * 2000.0;  // steps/sec at full speed
-const float Z_ACCELERATION = 10 * 4000.0;  // steps/sec^2 ramp rate
+const float Z_MAX_SPEED     =  2000.0;  // steps/sec at full speed
+const float Z_ACCELERATION = 40000.0;  // steps/sec^2 ramp rate
 
 // For Serial 
 char buf[32];
@@ -73,6 +75,26 @@ AccelStepper Zstepper(AccelStepper::DRIVER, Z_STEP_PIN, Z_DIR_PIN);
     AccelStepper Astepper(AccelStepper::DRIVER, A_STEP_PIN, A_DIR_PIN); 
 #endif
 
+long waitForNumber() {
+  char buf[16];
+  uint8_t n = 0;
+  for (;;) {
+    int c = Serial.read();
+    if (c < 0) continue;
+    if (c == '\n' || c == '\r') {
+      if (!n) continue;
+      buf[n] = 0;
+      n = 0;
+      char *end;
+      long v = strtol(buf, &end, 10);
+      if (!*end) return v;
+      Serial.println("Not a number, try again");
+      continue;
+    }
+    if (n < sizeof(buf) - 1) buf[n++] = c;
+  }
+}
+
 void setup() {
     pinMode(NEN_PIN, OUTPUT);
     pinMode(X_ENDSTOP, INPUT_PULLUP);
@@ -91,15 +113,26 @@ void setup() {
 
     Serial.begin(115200);
     while(!Serial);
-    Log.begin   (LOG_LEVEL_VERBOSE, &Serial);
+    Log.begin   (LOG_LEVEL_TRACE, &Serial);
+    /*
+     *  * 0 - LOG_LEVEL_SILENT     no output 
+        * 1 - LOG_LEVEL_FATAL      fatal errors 
+        * 2 - LOG_LEVEL_ERROR      all errors  
+        * 3 - LOG_LEVEL_WARNING    errors, and warnings 
+        * 4 - LOG_LEVEL_NOTICE     errors, warnings and notices 
+        * 5 - LOG_LEVEL_TRACE      errors, warnings, notices & traces 
+        * 6 - LOG_LEVEL_VERBOSE    all 
+     * */
 
     Log.traceln("Init");
 }
 
 uint32_t old_time = micros(); 
 uint32_t current_time = micros(); 
+int input_commandx = 0; 
+int input_commandy = 0;
 
-FSM OLD_FSM_STATE = 5; 
+FSM OLD_FSM_STATE = RETURN; 
 
 void loop() {
     Xstepper.run();  
@@ -125,7 +158,7 @@ void loop() {
 
     if (OLD_FSM_STATE != FSM_STATE)
     {
-        Log.traceln("FSM_STATE: %d -> %d", OLD_FSM_STATE, FSM_STATE);
+        Log.verboseln("FSM_STATE: %d -> %d", OLD_FSM_STATE, FSM_STATE);
         OLD_FSM_STATE = FSM_STATE;
     }
 
@@ -144,35 +177,34 @@ void loop() {
         {
             // FSM STATE = 0
             case HOME: 
-                Log.traceln("Starting Homing");
+                Log.traceln("Starting Input");
+                // log.fatalln("x_step_count: %d", x_step_count);
+            
+                input_commandx = 0; 
+                input_commandy = 0; 
+                input_commandx = waitForNumber();
+                if (input_commandx == 1) input_commandx = 600;
+                else if (input_commandx == 2) input_commandx = -600;
+                else input_commandy = waitForNumber();
 
+                
                 FSM_STATE = HOME_X;
-                Log.traceln("Starting Homing X");
+                Log.traceln("starting homing x");
+                Log.traceln("Number X: %d", input_commandx);
+                Log.traceln("Number Y: %d", input_commandy);
 
                 #ifdef SKIP_HOMING
                     FSM_STATE = PICK_DESCEND; 
                 #endif
-                    Ystepper.move( -64000); 
-                    y_step_count += -6400; 
 
                 break;
 
             // FSM STATE = 1
             case HOME_X: 
-                if (!digitalRead(X_ENDSTOP)) 
-                {
-                    FSM_STATE = HOME_Z;
-                    Log.traceln("Starting Homing Z");
-
-                    x_step_count = 0; 
-                    Xstepper.move(-100); // 1300 max motion 
-                    x_step_count += 100; 
-                }                
-
-                else 
-                {
-                    Xstepper.move(1); 
-                }
+                Xstepper.move(input_commandx); 
+                // Ystepper.move(input_commandy); 
+                Zstepper.move(input_commandy); 
+                FSM_STATE = HOME;
                 break; 
 
             // FSM STATE = 2
