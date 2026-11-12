@@ -143,7 +143,8 @@ void loop() {
                 Ystepper.distanceToGo() ||
                 Zstepper.distanceToGo() 
                 ); 
-    digitalWrite(NEN_PIN, MotorsOn ? LOW : HIGH); 
+    // digitalWrite(NEN_PIN, MotorsOn ? LOW : HIGH); 
+    digitalWrite(NEN_PIN, LOW); 
 
 
     if (x_step_count > 1300 || x_step_count < 0) 
@@ -183,10 +184,34 @@ void loop() {
                 input_commandx = 0; 
                 input_commandy = 0; 
                 input_commandx = waitForNumber();
-                if (input_commandx == 1) input_commandx = 600;
-                else if (input_commandx == 2) input_commandx = -600;
-                else input_commandy = waitForNumber();
+                switch(input_commandx)
+                {
+                    case 1:
+                        input_commandx = 600;
+                        break;
 
+                    case 2:
+                        input_commandx = -600;
+                        break;
+
+                    case 7: 
+                        digitalWrite(SOLENOID_PIN, HIGH); 
+                        input_commandx = 0; 
+                        input_commandy = 0; 
+                        break;
+
+                    case 8:
+                        digitalWrite(SOLENOID_PIN, LOW); 
+                        input_commandx = 0; 
+                        input_commandy = 0; 
+                        break;
+
+                    default:
+                        input_commandy = waitForNumber();
+                        break;
+
+                }
+                
                 
                 FSM_STATE = HOME_X;
                 Log.traceln("starting homing x");
