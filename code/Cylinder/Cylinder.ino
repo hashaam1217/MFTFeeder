@@ -9,6 +9,7 @@
 #include "ArduinoLog.h"
 #include <stdio.h>
 
+
 // #define SKIP_HOMING 
 
 // pinouts
@@ -76,6 +77,14 @@ AccelStepper Zstepper(AccelStepper::DRIVER, Z_STEP_PIN, Z_DIR_PIN);
     AccelStepper Astepper(AccelStepper::DRIVER, A_STEP_PIN, A_DIR_PIN); 
 #endif
 
+
+uint32_t old_time = micros(); 
+uint32_t current_time = micros(); 
+int input_commandx = 0; 
+int input_commandy = 0;
+int pressure_adc_value = 0; 
+
+
 long waitForNumber() {
   char buf[16];
   uint8_t n = 0;
@@ -93,8 +102,16 @@ long waitForNumber() {
       continue;
     }
     if (n < sizeof(buf) - 1) buf[n++] = c;
+        pressure_adc_value = analogRead(PRESSURE_PIN);
+        Log.traceln(pressure_adc_value);
   }
 }
+
+
+
+
+FSM OLD_FSM_STATE = RETURN; 
+
 
 void setup() {
     pinMode(NEN_PIN, OUTPUT);
@@ -126,14 +143,11 @@ void setup() {
      * */
 
     Log.traceln("Init");
+    
+    
 }
 
-uint32_t old_time = micros(); 
-uint32_t current_time = micros(); 
-int input_commandx = 0; 
-int input_commandy = 0;
 
-FSM OLD_FSM_STATE = RETURN; 
 
 void loop() {
     Xstepper.run();  
