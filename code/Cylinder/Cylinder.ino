@@ -26,6 +26,7 @@
 #define X_ENDSTOP       9
 #define Y_ENDSTOP       10 
 #define Z_ENDSTOP       11
+#define PRESSURE_PIN    A0
 
 #define DESCEND_DEPTH 2400 //2400 default 
 
