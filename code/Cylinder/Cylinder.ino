@@ -62,7 +62,7 @@ char buf[32];
 uint8_t idx = 0;
 
 // For Motors 
-int32_t x_step_count; 
+int32_t x_step_count = 0; 
 int32_t y_step_count; 
 int32_t z_step_count; 
 int32_t a_step_count; 
@@ -218,9 +218,14 @@ void loop() {
                 Log.traceln("Number X: %d", input_commandx);
                 Log.traceln("Number Y: %d", input_commandy);
 
+                Xstepper.move(-100); // 1300 max motion 
+                x_step_count += 100; 
+
                 #ifdef SKIP_HOMING
                     FSM_STATE = PICK_DESCEND; 
                 #endif
+                    // Ystepper.move( -64000); 
+                    // y_step_count += -6400; 
 
                 break;
 
